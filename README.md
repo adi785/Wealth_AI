@@ -1,7 +1,6 @@
 <div align="center">
 <h1>💰 Wealth AI</h1>
 <p><strong>AI-Powered Financial Intelligence for IDBI</strong></p>
-<img width="1200" height="475" alt="Wealth AI Banner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
 </div>
 
 ---
@@ -40,7 +39,6 @@ Wealth AI is an intelligent financial assistant built with Google's Gemini AI, d
 ### Prerequisites
 - Node.js (v16 or higher)
 - npm or yarn
-- Google Gemini API key (get it from [ai.google.dev](https://ai.google.dev))
 
 ### Installation
 
@@ -56,7 +54,6 @@ Wealth AI is an intelligent financial assistant built with Google's Gemini AI, d
    ```env
    GEMINI_API_KEY=your_api_key_here
    ```
-   Get your API key from [Google AI Studio](https://ai.studio)
 
 3. **Run Locally**
    ```bash
@@ -99,41 +96,6 @@ Wealth_AI/
 
 ---
 
-## 🔑 API Configuration
-
-### Setting Up Gemini API
-
-1. Go to [Google AI Studio](https://ai.studio)
-2. Create or select a project
-3. Generate an API key
-4. Add to `.env.local`:
-   ```env
-   GEMINI_API_KEY=your_generated_key
-   ```
-
-**Note:** Never commit `.env.local` to version control!
-
----
-
-## 🎯 Hackathon Tips
-
-### ⏱️ Time-Saving Ideas
-- Use pre-built Gemini API prompts for common financial queries
-- Leverage TypeScript for type safety to catch bugs early
-- Use the development server's hot reload for rapid iteration
-
-### 🧪 Testing Locally
-- Start with simple API calls to ensure your key is working
-- Test financial calculation accuracy with sample data
-- Verify response times under load
-
-### 📦 Deployment Options
-- **Vercel** - Zero-config deployment for Next.js
-- **Netlify** - Easy git-based deployment
-- **Google Cloud Run** - Container-based deployment
-
----
-
 ## 🚨 Common Issues
 
 | Issue | Solution |
@@ -142,15 +104,6 @@ Wealth_AI/
 | `npm install fails` | Try `npm cache clean --force` and reinstall |
 | `Port 3000 already in use` | Run `npm run dev -- -p 3001` to use a different port |
 
----
-
-## 📚 Documentation
-
-- [Google Gemini API Docs](https://ai.google.dev/docs)
-- [View your app in AI Studio](https://ai.studio/apps/da8584d5-d80f-428c-b475-dd4f7fa9eacb)
-- Official AI Studio Documentation
-
----
 
 ## 🤝 Contributing
 
@@ -177,5 +130,5 @@ This project is part of the IDBI AI initiative.
 
 <div align="center">
 <p><strong>Happy Hacking! 🚀</strong></p>
-<p>Built with ❤️ for the hackathon</p>
+<p>Built by InnoVyom with ❤️ for the hackathon</p>
 </div>
