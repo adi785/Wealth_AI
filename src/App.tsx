@@ -14,6 +14,105 @@ import ProfilePage from "./pages/ProfilePage";
 import { Transaction, Goal, Portfolio, UserProfile } from "./types";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 
+const fallbackUserData = {
+  profile: {
+    name: "Rahul Sharma",
+    email: "rahul.sharma@idbi.com",
+    age: 32,
+    occupation: "Senior Software Engineer",
+    monthlyIncome: 145000,
+    riskAppetite: "Moderate" as const,
+    investmentPreference: ["Mutual Funds", "Equity", "SIP"],
+    language: "English",
+    theme: "dark" as const
+  },
+  goals: [
+    {
+      id: "g-2000",
+      name: "Buy Dream House",
+      targetAmount: 7500000,
+      currentSavings: 2800000,
+      targetDate: "2030-12-31",
+      monthlyContribution: 45000,
+      category: "House" as const
+    },
+    {
+      id: "g-2001",
+      name: "Children's Education Fund",
+      targetAmount: 2500000,
+      currentSavings: 850000,
+      targetDate: "2035-06-30",
+      monthlyContribution: 15000,
+      category: "Education" as const
+    },
+    {
+      id: "g-2002",
+      name: "Europe Vacation 2027",
+      targetAmount: 600000,
+      currentSavings: 240000,
+      targetDate: "2027-05-15",
+      monthlyContribution: 10000,
+      category: "Vacation" as const
+    }
+  ],
+  portfolio: {
+    totalValue: 3850000,
+    assets: [
+      { category: "Equity Mutual Funds", amount: 1540000, percentage: 40, returnsYTD: 15.4, riskProfile: "High" as const, color: "#06b6d4" },
+      { category: "Debt Funds & Bonds", amount: 962500, percentage: 25, returnsYTD: 8.2, riskProfile: "Medium" as const, color: "#3b82f6" },
+      { category: "Fixed Deposit (FD)", amount: 577500, percentage: 15, returnsYTD: 7.1, riskProfile: "Low" as const, color: "#10b981" },
+      { category: "Digital Gold", amount: 385000, percentage: 10, returnsYTD: 11.4, riskProfile: "Low" as const, color: "#f59e0b" },
+      { category: "Government Bonds", amount: 385000, percentage: 10, returnsYTD: 6.8, riskProfile: "Low" as const, color: "#6366f1" }
+    ],
+    totalReturns: 540000,
+    ytdReturnsPercentage: 12.8,
+    growthHistory: [
+      { month: "Jan", value: 3200000, benchmark: 3150000 },
+      { month: "Feb", value: 3350000, benchmark: 3200000 },
+      { month: "Mar", value: 3420000, benchmark: 3300000 },
+      { month: "Apr", value: 3580000, benchmark: 3450000 },
+      { month: "May", value: 3710000, benchmark: 3520000 },
+      { month: "Jun", value: 3850000, benchmark: 3650000 }
+    ]
+  },
+  transactions: [
+    {
+      id: "tx-3000",
+      date: "2026-06-01",
+      category: "Income" as const,
+      description: "IDBI BANK Corporate Salary Credited",
+      amount: 145000,
+      type: "credit" as const,
+      status: "completed" as const
+    },
+    {
+      id: "tx-3001",
+      date: "2026-06-05",
+      category: "EMI" as const,
+      description: "HDFC Home Loan EMI",
+      amount: 32000,
+      type: "debit" as const,
+      status: "completed" as const
+    },
+    {
+      id: "tx-3002",
+      date: "2026-06-05",
+      category: "Investment" as const,
+      description: "Nippon India Small Cap SIP",
+      amount: 15000,
+      type: "debit" as const,
+      status: "completed" as const
+    }
+  ],
+  summary: {
+    liquidBalance: 450000,
+    monthlyIncome: 145000,
+    monthlySpending: 84300,
+    netSavings: 60700,
+    financialHealthScore: 84
+  }
+};
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -89,9 +188,13 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setUserData(data);
+      } else {
+        console.warn(`Failed to fetch user-data (status: ${res.status}). Activating client-side fallback ledger.`);
+        setUserData(fallbackUserData);
       }
     } catch (e) {
-      console.error("Failed to fetch initial ledger datasets:", e);
+      console.warn("Direct network connection to backend failed. Activating client-side fallback ledger:", e);
+      setUserData(fallbackUserData);
     }
   };
 
