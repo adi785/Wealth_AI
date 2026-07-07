@@ -12,9 +12,11 @@ import AIInsights from "./pages/AIInsights";
 import PortfolioPage from "./pages/PortfolioPage";
 import ProfilePage from "./pages/ProfilePage";
 import { Transaction, Goal, Portfolio, UserProfile } from "./types";
+import { supabase, isSupabaseConfigured } from "./lib/supabase";
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
   const [userData, setUserData] = useState<{
     profile: UserProfile;
     goals: Goal[];
@@ -29,32 +31,99 @@ export default function App() {
     };
   } | null>(null);
 
+  useEffect(() => {
+    // Prefer Supabase Auth listener if configured
+    if (isSupabaseConfigured && supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session) {
+          setToken(session.access_token);
+          setIsLoggedIn(true);
+        } else {
+          setToken(null);
+          setIsLoggedIn(false);
+          setUserData(null);
+        }
+      });
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+
+    // Fallback to Firebase Auth listener if Supabase is not configured
+    let unsubscribe: (() => void) | undefined;
+    const initAuth = async () => {
+      try {
+        const { auth } = await import("./lib/firebase");
+        unsubscribe = auth.onAuthStateChanged(async (user) => {
+          if (user) {
+            const userToken = await user.getIdToken();
+            setToken(userToken);
+            setIsLoggedIn(true);
+          }
+        });
+      } catch (err) {
+        console.error("Firebase Auth listener setup failed:", err);
+      }
+    };
+    
+    initAuth();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  const getHeaders = () => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   // Fetch full financial data on session activation
   const fetchUserData = async () => {
     try {
-      const res = await fetch("/api/user-data");
-      const data = await res.json();
-      setUserData(data);
+      const res = await fetch("/api/user-data", {
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserData(data);
+      }
     } catch (e) {
       console.error("Failed to fetch initial ledger datasets:", e);
     }
   };
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && token) {
       fetchUserData();
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, token]);
 
-  // Handle mock logouts
-  const handleLogout = () => {
+  // Handle mock and real logouts
+  const handleLogout = async () => {
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await supabase.auth.signOut();
+      } else {
+        const { auth } = await import("./lib/firebase");
+        await auth.signOut();
+      }
+    } catch (err) {
+      console.error("Failed to sign out:", err);
+    }
     setIsLoggedIn(false);
     setUserData(null);
+    setToken(null);
   };
 
   // On Login success
   const handleLoginSuccess = (email: string) => {
     setIsLoggedIn(true);
+    if (!token) {
+      setToken("mock-token-rahul");
+    }
   };
 
   // Add new savings goal and sync with backend
@@ -69,7 +138,7 @@ export default function App() {
     try {
       const res = await fetch("/api/goals", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: JSON.stringify(newGoal),
       });
       const data = await res.json();
@@ -97,7 +166,7 @@ export default function App() {
     try {
       const res = await fetch("/api/goals/invest", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: JSON.stringify({ goalId, amount }),
       });
       const data = await res.json();
@@ -117,7 +186,7 @@ export default function App() {
   };
 
   // Sync profile details updated inside settings
-  const handleUpdateProfile = (updatedProfile: Partial<UserProfile>) => {
+  const handleUpdateProfile = async (updatedProfile: Partial<UserProfile>) => {
     if (!userData) return;
     setUserData({
       ...userData,
@@ -130,6 +199,16 @@ export default function App() {
         monthlyIncome: updatedProfile.monthlyIncome ?? userData.summary.monthlyIncome,
       },
     });
+
+    try {
+      await fetch("/api/update-profile", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(updatedProfile),
+      });
+    } catch (error) {
+      console.error("Failed to sync profile updates on backend:", error);
+    }
   };
 
   return (

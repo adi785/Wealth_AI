@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
   User,
@@ -11,7 +11,13 @@ import {
   Save,
   ShieldCheck,
   TrendingUp,
-  Cpu
+  Cpu,
+  Database,
+  Cable,
+  Key,
+  ArrowRight,
+  AlertCircle,
+  Check
 } from "lucide-react";
 import AnimatedCard from "../components/AnimatedCard";
 import { UserProfile } from "../types";
@@ -29,6 +35,34 @@ export default function ProfilePage({ profile, onUpdateProfile }: ProfilePagePro
   const [riskAppetite, setRiskAppetite] = useState(profile.riskAppetite);
   const [language, setLanguage] = useState(profile.language);
   const [theme, setTheme] = useState(profile.theme);
+
+  const [dbStatus, setDbStatus] = useState<{
+    provider: "supabase" | "cloudsql";
+    supabaseConfigured: boolean;
+    supabaseClientActive: boolean;
+    dbUrlSet: boolean;
+    cloudSqlActive: boolean;
+  } | null>(null);
+  const [dbLoading, setDbLoading] = useState(true);
+
+  const fetchDbStatus = async () => {
+    setDbLoading(true);
+    try {
+      const res = await fetch("/api/db-status");
+      if (res.ok) {
+        const data = await res.json();
+        setDbStatus(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch database integration status:", err);
+    } finally {
+      setDbLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDbStatus();
+  }, []);
 
   // Checkboxes for preferences
   const preferencesList = ["Mutual Funds", "Equity", "Fixed Deposits (FD)", "Sovereign Gold Bonds", "Digital Assets", "Real Estate Bonds"];
@@ -309,6 +343,120 @@ export default function ProfilePage({ profile, onUpdateProfile }: ProfilePagePro
           </div>
 
         </form>
+
+        {/* Supabase Developer Integration Panel */}
+        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-white/10">
+            <div className="flex items-center space-x-3.5">
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <Database className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-sans font-bold text-white text-base">Supabase Integration Engine</h3>
+                <p className="text-slate-400 text-xs">Direct PostgreSQL connection & Supabase Client SDK environment status</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={fetchDbStatus}
+              disabled={dbLoading}
+              className="flex items-center space-x-2 px-4 py-2 text-xs font-bold text-cyan-400 bg-cyan-950/40 border border-cyan-500/25 hover:bg-cyan-900/40 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+            >
+              <Cable className={`h-3.5 w-3.5 ${dbLoading ? "animate-spin" : ""}`} />
+              <span>Verify Connections</span>
+            </button>
+          </div>
+
+          {/* Connection Status Badges */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Status 1: Direct DB */}
+            <div className="bg-black/20 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                  Drizzle Pool Connection
+                </span>
+                <span className="text-white font-bold text-sm block">
+                  {dbStatus?.provider === "supabase" ? "Supabase PostgreSQL" : "Cloud SQL PostgreSQL"}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-mono font-bold border bg-black/40">
+                {dbStatus?.provider === "supabase" ? (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-emerald-400 font-bold uppercase">Supabase Active</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-cyan-500" />
+                    <span className="text-cyan-400 font-bold uppercase">Cloud SQL Fallback</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Status 2: Client SDK */}
+            <div className="bg-black/20 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                  Client SDK Initialization
+                </span>
+                <span className="text-white font-bold text-sm block">
+                  {dbStatus?.supabaseClientActive ? "Supabase Client JS" : "Demo Simulation Client"}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-mono font-bold border bg-black/40">
+                {dbStatus?.supabaseClientActive ? (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-emerald-400 font-bold uppercase">Active</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-amber-500" />
+                    <span className="text-amber-400 font-bold uppercase">Demo Mode</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Setup Instructions */}
+          <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center space-x-2.5 text-amber-400/90 text-xs font-sans font-semibold">
+              <AlertCircle className="h-4 w-4" />
+              <span>Connect Your Personal Supabase Workspace</span>
+            </div>
+            
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Drizzle ORM is pre-configured to detect your connection automatically. By adding your credentials to the environment, you will override the Cloud SQL database and read/write directly to your Supabase PostgreSQL cluster.
+            </p>
+
+            <div className="space-y-3 pt-1">
+              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                Required Environment Secrets (Add via Settings Panel):
+              </span>
+              <div className="bg-black/30 border border-white/10 rounded-xl p-4 font-mono text-[11px] text-slate-300 space-y-2 select-all leading-relaxed break-all">
+                <div>
+                  <span className="text-emerald-400">SUPABASE_DB_URL</span>
+                  <span className="text-white">="postgresql://postgres.[PROJ-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?pgbouncer=true"</span>
+                </div>
+                <div>
+                  <span className="text-emerald-400">VITE_SUPABASE_URL</span>
+                  <span className="text-white">="https://[YOUR-PROJECT].supabase.co"</span>
+                </div>
+                <div>
+                  <span className="text-emerald-400">VITE_SUPABASE_ANON_KEY</span>
+                  <span className="text-white">="VITE_SUPABASE_ANON_KEY_VALUE"</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 text-[11px] text-slate-500 flex items-center space-x-2 font-sans">
+              <Check className="h-3.5 w-3.5 text-emerald-500" />
+              <span>Drizzle Schema migrations auto-route using Drizzle Kit. No manual database creation needed!</span>
+            </div>
+          </div>
+        </div>
 
       </div>
     </div>

@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { Transaction, Goal, Portfolio, UserProfile, AIInsight, InvestmentRecommendation, FinancialNewsItem } from "./src/types";
+import { getOrCreateUser, getUserData, updateUserProfile, createGoal, investInGoal } from "./src/db/users.ts";
 
 dotenv.config();
 
@@ -243,73 +244,144 @@ function generateMockTransactions(): Transaction[] {
 
 const mockTransactions = generateMockTransactions();
 
+// A middleware that resolves the user ID in the database, supporting both real Firebase token and mock bypass
+const resolveDbUser = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // If no token is provided, fallback to the default seed user (Rahul Sharma) so that the app stays fully functional even before authentication.
+    try {
+      const user = await getOrCreateUser('mock-user-rahul', 'rahul.sharma@idbi.com', 'Rahul Sharma');
+      req.dbUserId = user.id;
+      req.dbUserUid = user.uid;
+      return next();
+    } catch (err) {
+      console.error("Resolve default user failed:", err);
+      return res.status(500).json({ error: "Failed to initialize default session" });
+    }
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+  
+  if (token === 'mock-token-rahul') {
+    try {
+      const user = await getOrCreateUser('mock-user-rahul', 'rahul.sharma@idbi.com', 'Rahul Sharma');
+      req.dbUserId = user.id;
+      req.dbUserUid = user.uid;
+      return next();
+    } catch (err) {
+      console.error("Resolve mock token user failed:", err);
+      return res.status(500).json({ error: "Failed to initialize mock session" });
+    }
+  }
+
+  // Real Supabase verification (Preferred)
+  if (process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY) {
+    try {
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabaseServer = createClient(
+        process.env.VITE_SUPABASE_URL,
+        process.env.VITE_SUPABASE_ANON_KEY
+      );
+      const { data: { user }, error: sErr } = await supabaseServer.auth.getUser(token);
+      if (!sErr && user) {
+        const dbUser = await getOrCreateUser(
+          user.id,
+          user.email || "client@idbi.com",
+          user.user_metadata?.full_name || "Valued IDBI Client"
+        );
+        req.dbUserId = dbUser.id;
+        req.dbUserUid = dbUser.uid;
+        return next();
+      }
+    } catch (supabaseError) {
+      console.warn("Supabase token verification failed/bypassed:", supabaseError);
+    }
+  }
+
+  // Real Firebase authentication
+  try {
+    const { adminAuth } = await import("./src/lib/firebase-admin.ts");
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    
+    // Auto-sync / getOrCreate real user in PostgreSQL
+    const user = await getOrCreateUser(
+      decodedToken.uid,
+      decodedToken.email || "client@idbi.com",
+      decodedToken.name || "Valued IDBI Client"
+    );
+    
+    req.dbUserId = user.id;
+    req.dbUserUid = user.uid;
+    next();
+  } catch (error) {
+    console.error('Error verifying token on server:', error);
+    return res.status(401).json({ error: 'Unauthorized: Invalid token session' });
+  }
+};
+
 // ----------------------------------------------------
 // API ROUTES
 // ----------------------------------------------------
 
-// Standard profile and financial metrics
-app.get("/api/user-data", (req, res) => {
-  const debits = mockTransactions.filter(t => t.type === "debit");
-  const credits = mockTransactions.filter(t => t.type === "credit");
-
-  const totalSpending = debits.reduce((acc, t) => acc + t.amount, 0);
-  const totalIncome = credits.reduce((acc, t) => acc + t.amount, 0);
-
-  // Current balance
-  const currentBalance = 450000; // Liquid in bank account
-
-  res.json({
-    profile: mockProfile,
-    goals: mockGoals,
-    portfolio: mockPortfolio,
-    transactions: mockTransactions,
-    summary: {
-      liquidBalance: currentBalance,
-      monthlyIncome: mockProfile.monthlyIncome,
-      monthlySpending: 84300, // Normalized monthly spending
-      netSavings: mockProfile.monthlyIncome - 84300,
-      financialHealthScore: 84, // Out of 100
-    }
-  });
+// Standard profile and financial metrics (Database-backed)
+app.get("/api/user-data", resolveDbUser, async (req: any, res) => {
+  try {
+    const data = await getUserData(req.dbUserId);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Update profile risk appetite or income
-app.post("/api/update-profile", (req, res) => {
+app.post("/api/update-profile", resolveDbUser, async (req: any, res) => {
   const { riskAppetite, monthlyIncome, occupation, age, name } = req.body;
-  if (riskAppetite) mockProfile.riskAppetite = riskAppetite;
-  if (monthlyIncome) mockProfile.monthlyIncome = Number(monthlyIncome);
-  if (occupation) mockProfile.occupation = occupation;
-  if (age) mockProfile.age = Number(age);
-  if (name) mockProfile.name = name;
-
-  res.json({ success: true, profile: mockProfile });
+  try {
+    await updateUserProfile(req.dbUserId, { riskAppetite, monthlyIncome, occupation, age, name });
+    const data = await getUserData(req.dbUserId);
+    res.json({ success: true, profile: data.profile });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Create/Add Goal
-app.post("/api/goals", (req, res) => {
+app.post("/api/goals", resolveDbUser, async (req: any, res) => {
   const { name, targetAmount, targetDate, monthlyContribution, category } = req.body;
-  const newGoal: Goal = {
-    id: `g-${Date.now()}`,
-    name,
-    targetAmount: Number(targetAmount),
-    currentSavings: 0,
-    targetDate,
-    monthlyContribution: Number(monthlyContribution),
-    category,
-  };
-  mockGoals.push(newGoal);
-  res.json({ success: true, goals: mockGoals });
+  try {
+    await createGoal(req.dbUserId, { name, targetAmount, targetDate, monthlyContribution, category });
+    const data = await getUserData(req.dbUserId);
+    res.json({ success: true, goals: data.goals });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Update Goal progress (Simulate investing cash into goal)
-app.post("/api/goals/invest", (req, res) => {
+app.post("/api/goals/invest", resolveDbUser, async (req: any, res) => {
   const { goalId, amount } = req.body;
-  const goal = mockGoals.find(g => g.id === goalId);
-  if (goal) {
-    goal.currentSavings += Number(amount);
-    return res.json({ success: true, goals: mockGoals });
+  try {
+    await investInGoal(req.dbUserId, goalId, Number(amount));
+    const data = await getUserData(req.dbUserId);
+    res.json({ success: true, goals: data.goals });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  res.status(404).json({ error: "Goal not found" });
+});
+
+// Database Provider Integration Status
+app.get("/api/db-status", (req, res) => {
+  const hasSupabaseDbUrl = !!(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL);
+  const hasSupabaseClientKeys = !!(process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY);
+  
+  res.json({
+    provider: hasSupabaseDbUrl ? "supabase" : "cloudsql",
+    supabaseConfigured: hasSupabaseDbUrl,
+    supabaseClientActive: hasSupabaseClientKeys,
+    dbUrlSet: hasSupabaseDbUrl,
+    cloudSqlActive: !hasSupabaseDbUrl
+  });
 });
 
 // ----------------------------------------------------

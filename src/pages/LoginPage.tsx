@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { useNavigate, Link } from "react-router-dom";
 import { Landmark, Mail, Lock, ShieldAlert, ArrowRight, UserCheck } from "lucide-react";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
 interface LoginPageProps {
   onLoginSuccess: (email: string) => void;
@@ -12,9 +13,10 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -25,21 +27,84 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     setIsLoading(true);
 
-    // Simulate authentication lag
-    setTimeout(() => {
+    try {
+      if (isSupabaseConfigured && supabase) {
+        if (isSignUp) {
+          const { data, error: signUpErr } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: "Valued IDBI Client",
+              }
+            }
+          });
+          if (signUpErr) throw signUpErr;
+          
+          if (data.user && data.session === null) {
+            alert("Sign up successful! Please check your email for a confirmation link, or try signing in directly.");
+            setIsSignUp(false);
+          } else if (data.user && data.session) {
+            onLoginSuccess(data.user.email || "");
+            navigate("/dashboard");
+          }
+        } else {
+          const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (signInErr) throw signInErr;
+          
+          if (data.user) {
+            onLoginSuccess(data.user.email || "");
+            navigate("/dashboard");
+          }
+        }
+      } else {
+        // Simulate authentication lag
+        setTimeout(() => {
+          setIsLoading(false);
+          onLoginSuccess(email);
+          navigate("/dashboard");
+        }, 1200);
+      }
+    } catch (err: any) {
+      console.error("Supabase Authentication Error:", err);
+      setError(err.message || "Authentication failed. Please verify credentials.");
       setIsLoading(false);
-      onLoginSuccess(email);
-      navigate("/dashboard");
-    }, 1200);
+    } finally {
+      if (isSupabaseConfigured && supabase) {
+        setIsLoading(false);
+      }
+    }
   };
 
-  const triggerGoogleLogin = () => {
+  const triggerGoogleLogin = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    setError("");
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error: ssoErr } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: window.location.origin + window.location.pathname,
+          },
+        });
+        if (ssoErr) throw ssoErr;
+      } else {
+        // Fallback or demo SSO
+        setTimeout(() => {
+          setIsLoading(false);
+          onLoginSuccess("demo-sso-user@idbi.com");
+          navigate("/dashboard");
+        }, 1000);
+      }
+    } catch (err: any) {
+      console.error("Google SSO Error:", err);
+      setError(err.message || "Google authentication failed.");
+    } finally {
       setIsLoading(false);
-      onLoginSuccess("rahul.sharma@idbi.com");
-      navigate("/dashboard");
-    }, 1000);
+    }
   };
 
   return (
@@ -132,12 +197,24 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                <span>Sign In Securely</span>
+                <span>{isSignUp ? "Create Secure Account" : "Sign In Securely"}</span>
                 <ArrowRight className="h-4.5 w-4.5" />
               </>
             )}
           </button>
         </form>
+
+        {isSupabaseConfigured && (
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-xs text-cyan-400 hover:underline hover:text-cyan-300 font-medium font-sans"
+            >
+              {isSignUp ? "Already have an account? Sign In" : "Need a new account? Sign Up"}
+            </button>
+          </div>
+        )}
 
         {/* Divider */}
         <div className="relative my-6 text-center">
