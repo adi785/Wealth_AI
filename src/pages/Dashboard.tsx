@@ -17,7 +17,11 @@ import {
   ShieldCheck,
   Cpu,
   RefreshCw,
-  Newspaper
+  Newspaper,
+  User,
+  Trash2,
+  Database,
+  Save
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import AnimatedCard from "../components/AnimatedCard";
@@ -38,14 +42,116 @@ interface DashboardProps {
     };
   } | null;
   onInvestInGoal?: (goalId: string, amount: number) => void;
+  onClearSampleData?: () => void;
+  onRestoreDemoData?: () => void;
+  onAddTransaction?: (newTx: Omit<Transaction, "id">) => void;
+  onDeleteTransaction?: (txId: string) => void;
 }
 
-export default function Dashboard({ userData, onInvestInGoal }: DashboardProps) {
+const fallbackNews: FinancialNewsItem[] = [
+  {
+    id: "news-1",
+    title: "RBI Keeps Repo Rate Unchanged at 6.50% Amid Robust GDP Growth Outlook",
+    source: "Reserve Bank Bulletins",
+    timeAgo: "2 mins ago",
+    category: "Policy",
+    sentiment: "neutral",
+    impactScore: 8,
+    summary: "The Monetary Policy Committee has decided by a 5:1 majority to remain focused on withdrawal of accommodation to ensure that inflation progressively aligns with the target of 4.0%."
+  },
+  {
+    id: "news-2",
+    title: "IDBI Bank Expands Digital Infrastructure; Launches Omnichannel Retail Wealth Desk",
+    source: "Banking Ledger India",
+    timeAgo: "12 mins ago",
+    category: "Banking",
+    sentiment: "bullish",
+    impactScore: 9,
+    summary: "In a move to capture the growing affluent middle-class savings pool, IDBI Bank unveiled an integrated AI-driven personal ledger workspace for retail account holders."
+  },
+  {
+    id: "news-3",
+    title: "Nifty 50 Extends Rallies to Landmark Highs; IT and Financial Stocks Fuel Momentum",
+    source: "Dalal Street Wire",
+    timeAgo: "45 mins ago",
+    category: "Market",
+    sentiment: "bullish",
+    impactScore: 7,
+    summary: "Robust institutional buying combined with positive domestic retail participation pushed key benchmark indices past crucial psychological resistances, supported by strong sector rotation."
+  },
+  {
+    id: "news-4",
+    title: "Indian Tech Sector Registers 18% Year-on-Year Export Surge in Cloud AI Services",
+    source: "NASSCOM Insights",
+    timeAgo: "1 hour ago",
+    category: "Tech",
+    sentiment: "bullish",
+    impactScore: 6,
+    summary: "Software export receipts rose sharply as enterprise clients in the US and Europe ramped up custom integration pipelines for sovereign language models and real-time processing nodes."
+  },
+  {
+    id: "news-5",
+    title: "Federal Reserve Signals Slower Rate Cut Trajectory Citing Resilient US Labor Market",
+    source: "Bloomberg International",
+    timeAgo: "2 hours ago",
+    category: "Global",
+    sentiment: "bearish",
+    impactScore: 8,
+    summary: "FOMC minutes indicate policymakers are in no rush to aggressively drop interest rates, preferring a cautious, data-dependent stance that could keep domestic bond yields elevated."
+  },
+  {
+    id: "news-6",
+    title: "Global Crude Oil Prices Moderate to $74/Barrel as Middle East Supply Apprehensions Ease",
+    source: "Commodity Desk",
+    timeAgo: "4 hours ago",
+    category: "Global",
+    sentiment: "bullish",
+    impactScore: 7,
+    summary: "A cooling energy market offers substantial fiscal relief to major oil-importing economies like India, directly tempering fuel inflation and reducing current account deficits."
+  }
+];
+
+export default function Dashboard({
+  userData,
+  onInvestInGoal,
+  onClearSampleData,
+  onRestoreDemoData,
+  onAddTransaction,
+  onDeleteTransaction
+}: DashboardProps) {
   const [tickerAnimate, setTickerAnimate] = useState(false);
   const [news, setNews] = useState<FinancialNewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [newsFilter, setNewsFilter] = useState<'All' | 'Market' | 'Banking' | 'Policy' | 'Global' | 'Tech'>('All');
   const [lastRefreshed, setLastRefreshed] = useState<string>("");
+
+  const [activeFeedTab, setActiveFeedTab] = useState<"transaction" | "profile" | "starting">("transaction");
+
+  // Transaction form state
+  const [txAmount, setTxAmount] = useState("");
+  const [txCategory, setTxCategory] = useState<'Food' | 'Travel' | 'Shopping' | 'Utilities' | 'Entertainment' | 'Healthcare' | 'Bills' | 'EMI' | 'Investment' | 'Income'>("Shopping");
+  const [txType, setTxType] = useState<"credit" | "debit">("debit");
+  const [txDesc, setTxDesc] = useState("");
+  const [txDate, setTxDate] = useState(new Date().toISOString().split("T")[0]);
+
+  // Profile form state
+  const [profName, setProfName] = useState("");
+  const [profIncome, setProfIncome] = useState("");
+  const [profOcc, setProfOcc] = useState("");
+  const [profAge, setProfAge] = useState("");
+
+  // Starting cash balance
+  const [startingBal, setStartingBal] = useState("");
+
+  useEffect(() => {
+    if (userData?.profile) {
+      setProfName(userData.profile.name);
+      setProfIncome(String(userData.profile.monthlyIncome));
+      setProfOcc(userData.profile.occupation);
+      setProfAge(String(userData.profile.age));
+      setStartingBal(localStorage.getItem("idbi_starting_balance") || "450000");
+    }
+  }, [userData]);
 
   const fetchNews = async () => {
     setNewsLoading(true);
@@ -54,12 +160,16 @@ export default function Dashboard({ userData, onInvestInGoal }: DashboardProps) 
       if (res.ok) {
         const data = await res.json();
         setNews(data);
-        setLastRefreshed(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      } else {
+        console.warn("API returned error, using client-side fallback financial news feed.");
+        setNews(fallbackNews);
       }
     } catch (err) {
-      console.error("Error fetching news: ", err);
+      console.warn("Could not connect to backend, activating client-side fallback financial news feed:", err);
+      setNews(fallbackNews);
     } finally {
       setNewsLoading(false);
+      setLastRefreshed(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }
   };
 
@@ -132,6 +242,362 @@ export default function Dashboard({ userData, onInvestInGoal }: DashboardProps) 
               <Cpu className="h-4.5 w-4.5 animate-pulse" />
               <span>Voice AI Advisor</span>
             </Link>
+          </div>
+        </div>
+
+        {/* Custom Data Feed Center */}
+        <div id="data-feed-console" className="bg-white/5 border border-white/10 rounded-[32px] p-6 backdrop-blur-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 pb-6 border-b border-white/10 mb-6">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <span className="p-1 rounded bg-cyan-500/15 text-cyan-400">
+                  <Database className="h-4 w-4" />
+                </span>
+                <h2 className="text-xl font-extrabold text-white font-sans">
+                  Custom Ledger Config Console
+                </h2>
+              </div>
+              <p className="text-xs text-slate-400">
+                You can feed custom data according to you. Reset to clean slate, or insert specific transactions!
+              </p>
+            </div>
+            
+            {/* Quick Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                id="btn-clear-mock-data"
+                onClick={onClearSampleData}
+                className="px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 font-bold text-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Clear Sample Data (Start Fresh)</span>
+              </button>
+              
+              <button
+                id="btn-restore-sample"
+                onClick={onRestoreDemoData}
+                className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 font-bold text-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Restore IDBI Demo Ledger</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Form Tabs */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Tab selection sidebar */}
+            <div className="md:col-span-3 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0">
+              <button
+                id="tab-btn-tx"
+                type="button"
+                onClick={() => setActiveFeedTab("transaction")}
+                className={`w-full text-left px-4 py-3 rounded-xl text-xs font-semibold flex items-center space-x-2.5 transition-all border cursor-pointer ${
+                  activeFeedTab === "transaction"
+                    ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                    : "bg-transparent border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                }`}
+              >
+                <Plus className="h-4 w-4" />
+                <span>Log Transaction</span>
+              </button>
+
+              <button
+                id="tab-btn-prof"
+                type="button"
+                onClick={() => setActiveFeedTab("profile")}
+                className={`w-full text-left px-4 py-3 rounded-xl text-xs font-semibold flex items-center space-x-2.5 transition-all border cursor-pointer ${
+                  activeFeedTab === "profile"
+                    ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                    : "bg-transparent border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                }`}
+              >
+                <User className="h-4 w-4" />
+                <span>My Profile Metrics</span>
+              </button>
+
+              <button
+                id="tab-btn-starting"
+                type="button"
+                onClick={() => setActiveFeedTab("starting")}
+                className={`w-full text-left px-4 py-3 rounded-xl text-xs font-semibold flex items-center space-x-2.5 transition-all border cursor-pointer ${
+                  activeFeedTab === "starting"
+                    ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                    : "bg-transparent border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                }`}
+              >
+                <Wallet className="h-4 w-4" />
+                <span>Configure Balances</span>
+              </button>
+            </div>
+
+            {/* Tab views */}
+            <div className="md:col-span-9 bg-black/20 border border-white/5 rounded-2xl p-5">
+              {activeFeedTab === "transaction" && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!txAmount || !txDesc) {
+                      alert("Please provide transaction amount and description.");
+                      return;
+                    }
+                    onAddTransaction?.({
+                      amount: Number(txAmount),
+                      description: txDesc,
+                      category: txCategory,
+                      type: txType,
+                      date: txDate,
+                      status: "completed"
+                    });
+                    setTxAmount("");
+                    setTxDesc("");
+                    alert("Transaction logged successfully! Liquid cash balances adjusted.");
+                  }}
+                  className="space-y-4"
+                >
+                  <h3 className="text-sm font-bold text-white mb-2 flex items-center space-x-1">
+                    <span>Add Custom Ledger Entry</span>
+                    <span className="text-[10px] text-slate-500 font-normal">(Updates cash balance instantly)</span>
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Type</label>
+                      <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => setTxType("debit")}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                            txType === "debit" ? "bg-red-500/25 text-red-400" : "text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          Debit (Outflow)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTxType("credit")}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                            txType === "credit" ? "bg-emerald-500/25 text-emerald-400" : "text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          Credit (Inflow)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Amount (₹)</label>
+                      <input
+                        type="number"
+                        value={txAmount}
+                        onChange={(e) => setTxAmount(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white"
+                        placeholder="e.g. 5000"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Category</label>
+                      <select
+                        value={txCategory}
+                        onChange={(e) => setTxCategory(e.target.value as any)}
+                        className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white cursor-pointer"
+                      >
+                        <option value="Food">Food & Dining</option>
+                        <option value="Travel">Travel & Transit</option>
+                        <option value="Shopping">Shopping & Lifestyle</option>
+                        <option value="Utilities">Utilities & WiFi</option>
+                        <option value="Entertainment">Subscriptions & Fun</option>
+                        <option value="Healthcare">Medicines & Healthcare</option>
+                        <option value="Bills">Fixed Monthly Bills</option>
+                        <option value="EMI">EMI & Loans</option>
+                        <option value="Investment">Mutual Fund / Investment</option>
+                        <option value="Income">Salary / Income</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Ledger Date</label>
+                      <input
+                        type="date"
+                        value={txDate}
+                        onChange={(e) => setTxDate(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                    <input
+                      type="text"
+                      value={txDesc}
+                      onChange={(e) => setTxDesc(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white"
+                      placeholder="e.g. Starbucks Latte, Rent, Salary Deposit"
+                      required
+                    />
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Insert Ledger Record</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {activeFeedTab === "profile" && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!profName || !profIncome) {
+                      alert("Please provide name and monthly income.");
+                      return;
+                    }
+                    if (userData?.profile) {
+                      userData.profile.name = profName;
+                      userData.profile.monthlyIncome = Number(profIncome);
+                      userData.profile.occupation = profOcc;
+                      userData.profile.age = Number(profAge);
+                      
+                      // Trigger state change
+                      onAddTransaction?.({
+                        date: new Date().toISOString().split("T")[0],
+                        category: "Income",
+                        description: "Profile sync refresh",
+                        amount: 0.01,
+                        type: "credit",
+                        status: "completed"
+                      });
+                    }
+                    alert("Profile metrics successfully saved and synchronized!");
+                  }}
+                  className="space-y-4"
+                >
+                  <h3 className="text-sm font-bold text-white mb-2 flex items-center space-x-1">
+                    <span>Customize Profile Metrics</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Full Name</label>
+                      <input
+                        type="text"
+                        value={profName}
+                        onChange={(e) => setProfName(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Monthly Income (₹)</label>
+                      <input
+                        type="number"
+                        value={profIncome}
+                        onChange={(e) => setProfIncome(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Occupation</label>
+                      <input
+                        type="text"
+                        value={profOcc}
+                        onChange={(e) => setProfOcc(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Age</label>
+                      <input
+                        type="number"
+                        value={profAge}
+                        onChange={(e) => setProfAge(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <Save className="h-4 w-4" />
+                      <span>Save Profile Details</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {activeFeedTab === "starting" && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-white mb-2">
+                    <span>Configure Base Vault Balances</span>
+                  </h3>
+                  
+                  <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                    Set your initial liquid starting capital base. Standard credit and debit transactions logged will offset dynamically from this number to yield your total liquid assets.
+                  </p>
+
+                  <div className="flex gap-4 items-end max-w-md">
+                    <div className="flex-grow">
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1.5">Base Starting Cash (₹)</label>
+                      <input
+                        type="number"
+                        value={startingBal}
+                        onChange={(e) => setStartingBal(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-cyan-500/40 text-white"
+                        placeholder="e.g. 500000"
+                      />
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!startingBal || Number(startingBal) < 0) {
+                          alert("Please enter a valid starting balance.");
+                          return;
+                        }
+                        localStorage.setItem("idbi_starting_balance", startingBal);
+                        onAddTransaction?.({
+                          date: new Date().toISOString().split("T")[0],
+                          category: "Income",
+                          description: "Starting cash updated",
+                          amount: 0.01,
+                          type: "credit",
+                          status: "completed"
+                        });
+                        alert("Starting liquid balance updated successfully!");
+                      }}
+                      className="px-5 py-2.5 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 h-[38px] cursor-pointer"
+                    >
+                      <Save className="h-4 w-4" />
+                      <span>Apply</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -537,11 +1003,25 @@ export default function Dashboard({ userData, onInvestInGoal }: DashboardProps) 
                     </div>
                   </div>
 
-                  <span className={`font-mono font-extrabold text-sm ${
-                    tx.type === "credit" ? "text-emerald-400" : "text-slate-200"
-                  }`}>
-                    {tx.type === "credit" ? "+" : "-"}{currencyFormatter(tx.amount)}
-                  </span>
+                  <div className="flex items-center space-x-3">
+                    <span className={`font-mono font-extrabold text-sm ${
+                      tx.type === "credit" ? "text-emerald-400" : "text-slate-200"
+                    }`}>
+                      {tx.type === "credit" ? "+" : "-"}{currencyFormatter(tx.amount)}
+                    </span>
+                    <button
+                      id={`btn-del-tx-${tx.id}`}
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to delete "${tx.description}"?`)) {
+                          onDeleteTransaction?.(tx.id);
+                        }
+                      }}
+                      className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-white/5 transition-all cursor-pointer"
+                      title="Delete transaction"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

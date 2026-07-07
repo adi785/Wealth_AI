@@ -7,157 +7,25 @@ import { Goal, Transaction, Portfolio } from '../types.ts';
 // DEFAULT SEED GENERATORS
 // ----------------------------------------------------
 
-const defaultGoalsList = [
-  {
-    name: "Buy Dream House",
-    targetAmount: 7500000,
-    currentSavings: 1800000,
-    targetDate: "2031-12-31",
-    monthlyContribution: 45000,
-    category: "House",
-  },
-  {
-    name: "Children's Higher Education",
-    targetAmount: 2500000,
-    currentSavings: 650000,
-    targetDate: "2036-06-30",
-    monthlyContribution: 15000,
-    category: "Education",
-  },
-  {
-    name: "Tesla electric car",
-    targetAmount: 4000000,
-    currentSavings: 800000,
-    targetDate: "2029-03-31",
-    monthlyContribution: 25000,
-    category: "Car",
-  },
-  {
-    name: "Retirement Gold Chest",
-    targetAmount: 50000000,
-    currentSavings: 2400000,
-    targetDate: "2054-07-07",
-    monthlyContribution: 30000,
-    category: "Retirement",
-  },
-];
+const defaultGoalsList: any[] = [];
 
 const defaultPortfolioData = {
-  totalValue: 3850000,
-  assets: [
-    { category: "Mutual Funds", amount: 1540000, percentage: 40, returnsYTD: 14.5, riskProfile: "Medium", color: "#3b82f6" },
-    { category: "Equity/ETF", amount: 962500, percentage: 25, returnsYTD: 18.2, riskProfile: "High", color: "#06b6d4" },
-    { category: "Fixed Deposit (FD)", amount: 577500, percentage: 15, returnsYTD: 7.1, riskProfile: "Low", color: "#10b981" },
-    { category: "Digital Gold", amount: 385000, percentage: 10, returnsYTD: 11.4, riskProfile: "Low", color: "#f59e0b" },
-    { category: "Government Bonds", amount: 385000, percentage: 10, returnsYTD: 6.8, riskProfile: "Low", color: "#6366f1" },
-  ],
-  totalReturns: 540000,
-  ytdReturnsPercentage: 12.8,
+  totalValue: 0,
+  assets: [] as any[],
+  totalReturns: 0,
+  ytdReturnsPercentage: 0,
   growthHistory: [
-    { month: "Jan", value: 3200000, benchmark: 3150000 },
-    { month: "Feb", value: 3350000, benchmark: 3200000 },
-    { month: "Mar", value: 3420000, benchmark: 3300000 },
-    { month: "Apr", value: 3580000, benchmark: 3450000 },
-    { month: "May", value: 3710000, benchmark: 3520000 },
-    { month: "Jun", value: 3850000, benchmark: 3650000 },
+    { month: "Jan", value: 0, benchmark: 0 },
+    { month: "Feb", value: 0, benchmark: 0 },
+    { month: "Mar", value: 0, benchmark: 0 },
+    { month: "Apr", value: 0, benchmark: 0 },
+    { month: "May", value: 0, benchmark: 0 },
+    { month: "Jun", value: 0, benchmark: 0 }
   ],
 };
 
 function generateDefaultTransactions(): Omit<Transaction, 'id'>[] {
-  const transactionList: Omit<Transaction, 'id'>[] = [];
-
-  // Add predictable credits (Salary)
-  transactionList.push({
-    date: "2026-06-01",
-    category: "Income",
-    description: "IDBI BANK Corporate Salary Credited",
-    amount: 145000,
-    type: "credit",
-    status: "completed",
-  });
-  transactionList.push({
-    date: "2026-05-01",
-    category: "Income",
-    description: "IDBI BANK Corporate Salary Credited",
-    amount: 145000,
-    type: "credit",
-    status: "completed",
-  });
-  transactionList.push({
-    date: "2026-04-01",
-    category: "Income",
-    description: "IDBI BANK Corporate Salary Credited",
-    amount: 145000,
-    type: "credit",
-    status: "completed",
-  });
-
-  // Predictable EMIs and Bills
-  const recurring = [
-    { category: "EMI" as const, desc: "HDFC Home Loan EMI", amount: 32000 },
-    { category: "Bills" as const, desc: "Tata Power Electricity Bill", amount: 4800 },
-    { category: "Bills" as const, desc: "Airtel Fiber Broadband", amount: 1199 },
-    { category: "Investment" as const, desc: "Nippon India Small Cap SIP", amount: 15000 },
-    { category: "Investment" as const, desc: "HDFC Index Fund SIP", amount: 10000 },
-  ];
-
-  for (let m = 4; m <= 6; m++) {
-    const monthStr = m < 10 ? `0${m}` : `${m}`;
-    recurring.forEach((item) => {
-      transactionList.push({
-        date: `2026-${monthStr}-05`,
-        category: item.category,
-        description: item.desc,
-        amount: item.amount,
-        type: "debit",
-        status: "completed",
-      });
-    });
-  }
-
-  // Random transactional expenses (approx 30 transactions to prevent slow insertions)
-  const randomExpenses = [
-    { category: "Food" as const, descs: ["Zomato Food Delivery", "Swiggy Order", "Starbucks Coffee", "Barbeque Nation Dinner", "Local Grocery Store"] },
-    { category: "Travel" as const, descs: ["Uber Ride", "Ola Cabs", "HP Petrol Pump", "MakeMyTrip Flight Booking"] },
-    { category: "Shopping" as const, descs: ["Amazon Shopping", "Myntra Clothing", "Flipkart Retail", "Zara Store"] },
-    { category: "Utilities" as const, descs: ["Indane Gas Cylinder", "Airtel Prepaid Mobile"] },
-    { category: "Entertainment" as const, descs: ["Netflix Monthly Subscription", "BookMyShow Movie Tickets", "Spotify Premium"] },
-    { category: "Healthcare" as const, descs: ["Apollo Pharmacy Medicines", "Max Healthcare Clinic"] },
-  ];
-
-  const dates = [];
-  for (let i = 1; i <= 90; i++) {
-    const date = new Date("2026-04-01");
-    date.setDate(date.getDate() + i);
-    dates.push(date.toISOString().split("T")[0]);
-  }
-
-  for (let i = 0; i < 30; i++) {
-    const rDate = dates[Math.floor(Math.random() * dates.length)];
-    const group = randomExpenses[Math.floor(Math.random() * randomExpenses.length)];
-    const desc = group.descs[Math.floor(Math.random() * group.descs.length)];
-    let amount = Math.floor(Math.random() * 2500) + 150;
-
-    if (desc.includes("Flight") || desc.includes("Zara")) {
-      amount = Math.floor(Math.random() * 8000) + 3000;
-    }
-
-    const isSuspicious = i === 5 || i === 18;
-    const finalDesc = isSuspicious ? (i === 5 ? "Unknown Foreign Merchant Moscow" : "Suspicious Online Crypto Gateway") : desc;
-    const finalAmount = isSuspicious ? (i === 5 ? 48500 : 92000) : amount;
-
-    transactionList.push({
-      date: rDate,
-      category: group.category,
-      description: finalDesc,
-      amount: finalAmount,
-      type: "debit",
-      status: isSuspicious ? "flagged" : "completed",
-      flagReason: isSuspicious ? (i === 5 ? "Unusual high-value foreign transaction executed from a blacklisted merchant location." : "High velocity transfer to suspicious cryptocurrency escrow wallet.") : undefined,
-    });
-  }
-
-  return transactionList.sort((a, b) => b.date.localeCompare(a.date));
+  return [];
 }
 
 // ----------------------------------------------------
@@ -187,12 +55,12 @@ export async function getOrCreateUser(uid: string, email: string, name: string =
         .values({
           uid,
           email,
-          name,
-          age: 32,
-          occupation: "Senior Software Engineer",
-          monthlyIncome: 145000,
+          name: name || "Valued Customer",
+          age: 30,
+          occupation: "Private Sector Executive",
+          monthlyIncome: 120000,
           riskAppetite: "Moderate",
-          investmentPreference: ["Mutual Funds", "Equity", "SIP"],
+          investmentPreference: ["Mutual Funds"],
           language: "English",
           theme: "dark"
         })
@@ -252,12 +120,12 @@ export async function getOrCreateUser(uid: string, email: string, name: string =
       id: mockId,
       uid,
       email,
-      name,
-      age: 32,
-      occupation: "Senior Software Engineer",
-      monthlyIncome: 145000,
+      name: name || "Valued Customer",
+      age: 30,
+      occupation: "Private Sector Executive",
+      monthlyIncome: 120000,
       riskAppetite: "Moderate",
-      investmentPreference: ["Mutual Funds", "Equity", "SIP"],
+      investmentPreference: ["Mutual Funds"],
       language: "English",
       theme: "dark"
     };
@@ -325,8 +193,8 @@ export async function getUserData(userId: number) {
     const totalSpending = debits.reduce((acc, t) => acc + t.amount, 0);
     const totalIncome = credits.reduce((acc, t) => acc + t.amount, 0);
 
-    // Dynamic current liquid balance calculation or static baseline + difference
-    const liquidBalance = Math.max(10000, 450000 + (totalIncome - totalSpending - 200000)); // offset calculation
+    // Dynamic current liquid balance starting from 200000
+    const liquidBalance = 200000 + totalIncome - totalSpending;
 
     // Portfolio fallback if none exists
     const defaultPort = {
@@ -394,13 +262,13 @@ export async function getUserData(userId: number) {
     
     // In-Memory fallback retrieval
     const profile = memoryUsersStore.get(String(userId)) || {
-      name: "Rahul Sharma",
-      email: "rahul.sharma@idbi.com",
-      age: 32,
-      occupation: "Senior Software Engineer",
-      monthlyIncome: 145000,
+      name: "Valued Customer",
+      email: "client@idbi.com",
+      age: 30,
+      occupation: "Private Sector Executive",
+      monthlyIncome: 120000,
       riskAppetite: "Moderate",
-      investmentPreference: ["Mutual Funds", "Equity", "SIP"],
+      investmentPreference: ["Mutual Funds"],
       language: "English",
       theme: "dark"
     };

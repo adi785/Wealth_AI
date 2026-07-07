@@ -26,7 +26,8 @@ import {
   Compass,
   ArrowRight,
   ShieldCheck,
-  ChevronDown
+  ChevronDown,
+  Trash2
 } from "lucide-react";
 import AnimatedCard from "../components/AnimatedCard";
 import { Transaction } from "../types";
@@ -34,9 +35,16 @@ import { Transaction } from "../types";
 interface SpendingAnalyticsProps {
   transactions: Transaction[];
   monthlyIncome: number;
+  onAddTransaction?: (newTx: Omit<Transaction, "id">) => void;
+  onDeleteTransaction?: (txId: string) => void;
 }
 
-export default function SpendingAnalytics({ transactions, monthlyIncome }: SpendingAnalyticsProps) {
+export default function SpendingAnalytics({
+  transactions,
+  monthlyIncome,
+  onAddTransaction,
+  onDeleteTransaction
+}: SpendingAnalyticsProps) {
   const [filterCategory, setFilterCategory] = useState<string>("All");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
@@ -280,6 +288,7 @@ export default function SpendingAnalytics({ transactions, monthlyIncome }: Spend
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4">Ledger Date</th>
                   <th className="py-3 px-4 text-right">Amount</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -313,6 +322,19 @@ export default function SpendingAnalytics({ transactions, monthlyIncome }: Spend
                       tx.type === "credit" ? "text-emerald-400" : "text-slate-200"
                     }`}>
                       {tx.type === "credit" ? "+" : "-"}{currencyFormatter(tx.amount)}
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete "${tx.description}"?`)) {
+                            onDeleteTransaction?.(tx.id);
+                          }
+                        }}
+                        className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-white/5 transition cursor-pointer"
+                        title="Delete record"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}

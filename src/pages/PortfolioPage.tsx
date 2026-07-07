@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
   PieChart as RePieChart,
@@ -30,11 +30,31 @@ import { Portfolio } from "../types";
 
 interface PortfolioPageProps {
   portfolio: Portfolio;
+  onUpdatePortfolioAssets?: (updatedAssets: Portfolio["assets"]) => void;
 }
 
-export default function PortfolioPage({ portfolio }: PortfolioPageProps) {
+export default function PortfolioPage({ portfolio, onUpdatePortfolioAssets }: PortfolioPageProps) {
   const [projectionRate, setProjectionRate] = useState<number>(12); // Default 12% growth rate
   const [projectionYears, setProjectionYears] = useState<number>(15); // Default 15 years target
+
+  // Local state for editing asset weights
+  const [editingWeights, setEditingWeights] = useState<{ [category: string]: number }>(() => {
+    const weights: { [category: string]: number } = {};
+    portfolio.assets.forEach(asset => {
+      weights[asset.category] = asset.percentage;
+    });
+    return weights;
+  });
+
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    const weights: { [category: string]: number } = {};
+    portfolio.assets.forEach(asset => {
+      weights[asset.category] = asset.percentage;
+    });
+    setEditingWeights(weights);
+  }, [portfolio]);
 
   const currencyFormatter = (val: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -121,41 +141,149 @@ export default function PortfolioPage({ portfolio }: PortfolioPageProps) {
           
           {/* Tabular details (7 Cols) */}
           <div className="lg:col-span-7">
-            <AnimatedCard title="Asset Class Allocations" subtitle="Fully-audited list of your dynamic portfolio shares">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-white/10 text-[11px] uppercase tracking-wider font-mono text-slate-500">
-                      <th className="py-2 pb-3">Asset Class</th>
-                      <th className="py-2 pb-3">Allocation Balance</th>
-                      <th className="py-2 pb-3 font-mono">Allocation Ratio</th>
-                      <th className="py-2 pb-3 font-mono">Compound YTD</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {portfolio.assets.map((asset, i) => (
-                      <tr key={i} className="hover:bg-white/5 transition">
-                        <td className="py-4 flex items-center space-x-2.5">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: asset.color }} />
-                          <div>
-                            <span className="font-sans font-bold text-sm text-white block">{asset.category}</span>
-                            <span className="text-[10px] uppercase font-mono text-slate-500 font-bold">Risk: {asset.riskProfile}</span>
+            <AnimatedCard
+              title="Asset Class Allocations"
+              subtitle="Fully-audited list of your dynamic portfolio shares"
+              headerAction={
+                <button
+                  id="btn-edit-allocations"
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-cyan-400 hover:bg-white/10 active:scale-95 transition-all text-xs font-bold font-sans flex items-center space-x-1 cursor-pointer"
+                >
+                  <Sliders className="h-3.5 w-3.5" />
+                  <span>{isEditing ? "View Allocations" : "Adjust Weights"}</span>
+                </button>
+              }
+            >
+              {isEditing ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    // Let's sum the weights
+                    const sum = (Object.values(editingWeights) as number[]).reduce((a, b) => a + b, 0);
+                    if (sum !== 100) {
+                      if (!confirm(`Notice: Asset weights sum to ${sum}%, but they should ideally sum to exactly 100%. Would you like to adjust and save anyway?`)) {
+                        return;
+                      }
+                    }
+                    
+                    // Construct updated assets list
+                    const updatedAssets = portfolio.assets.map(asset => {
+                      const newPercentage = editingWeights[asset.category] || 0;
+                      // Recalculate amount based on percentage of total value
+                      const newAmount = Math.round(portfolio.totalValue * (newPercentage / 100));
+                      return {
+                        ...asset,
+                        percentage: newPercentage,
+                        amount: newAmount
+                      };
+                    });
+                    
+                    onUpdatePortfolioAssets?.(updatedAssets);
+                    setIsEditing(false);
+                    alert("Portfolio asset weights updated successfully!");
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-4">
+                    {portfolio.assets.map((asset, index) => {
+                      const currentVal = editingWeights[asset.category] ?? asset.percentage;
+                      return (
+                        <div key={index} className="space-y-1 bg-white/5 border border-white/10 p-3.5 rounded-xl">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center space-x-2">
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: asset.color }} />
+                              <span className="font-bold text-white">{asset.category}</span>
+                            </div>
+                            <span className="font-mono text-cyan-400 font-bold">{currentVal}%</span>
                           </div>
-                        </td>
-                        <td className="py-4 font-mono font-bold text-sm text-slate-200">
-                          {currencyFormatter(asset.amount)}
-                        </td>
-                        <td className="py-4 font-mono font-bold text-xs text-slate-400">
-                          {asset.percentage}%
-                        </td>
-                        <td className="py-4 font-mono font-extrabold text-sm text-emerald-400">
-                          +{asset.returnsYTD}%
-                        </td>
+                          
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={currentVal}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setEditingWeights(prev => ({
+                                  ...prev,
+                                  [asset.category]: val
+                                }));
+                              }}
+                              className="flex-grow accent-cyan-400 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={currentVal}
+                              onChange={(e) => {
+                                const val = Math.min(100, Math.max(0, Number(e.target.value)));
+                                setEditingWeights(prev => ({
+                                  ...prev,
+                                  [asset.category]: val
+                                }));
+                              }}
+                              className="w-14 text-center bg-slate-900 border border-white/10 rounded-lg px-1.5 py-1 text-xs font-mono text-white"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex justify-between items-center text-[11px] text-slate-400 bg-white/5 p-3 rounded-xl border border-white/10 font-mono">
+                    <span>
+                      Total Weights Sum:{" "}
+                      <span className={(Object.values(editingWeights) as number[]).reduce((a, b) => a + b, 0) === 100 ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                        {(Object.values(editingWeights) as number[]).reduce((a, b) => a + b, 0)}%
+                      </span>
+                    </span>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400 rounded-xl font-bold text-xs flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <span>Save Weights</span>
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-white/10 text-[11px] uppercase tracking-wider font-mono text-slate-500">
+                        <th className="py-2 pb-3">Asset Class</th>
+                        <th className="py-2 pb-3">Allocation Balance</th>
+                        <th className="py-2 pb-3 font-mono">Allocation Ratio</th>
+                        <th className="py-2 pb-3 font-mono">Compound YTD</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {portfolio.assets.map((asset, i) => (
+                        <tr key={i} className="hover:bg-white/5 transition">
+                          <td className="py-4 flex items-center space-x-2.5">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: asset.color }} />
+                            <div>
+                              <span className="font-sans font-bold text-sm text-white block">{asset.category}</span>
+                              <span className="text-[10px] uppercase font-mono text-slate-500 font-bold">Risk: {asset.riskProfile}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 font-mono font-bold text-sm text-slate-200">
+                            {currencyFormatter(asset.amount)}
+                          </td>
+                          <td className="py-4 font-mono font-bold text-xs text-slate-400">
+                            {asset.percentage}%
+                          </td>
+                          <td className="py-4 font-mono font-extrabold text-sm text-emerald-400">
+                            +{asset.returnsYTD}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </AnimatedCard>
           </div>
 

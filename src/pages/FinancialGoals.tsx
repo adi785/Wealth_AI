@@ -12,7 +12,8 @@ import {
   ChevronDown,
   Compass,
   DollarSign,
-  Briefcase
+  Briefcase,
+  Trash2
 } from "lucide-react";
 import AnimatedCard from "../components/AnimatedCard";
 import { Goal } from "../types";
@@ -27,10 +28,11 @@ interface FinancialGoalsProps {
     category: 'House' | 'Car' | 'Education' | 'Vacation' | 'Retirement' | 'General';
   }) => void;
   onInvestInGoal: (goalId: string, amount: number) => void;
+  onDeleteGoal?: (goalId: string) => void;
   liquidBalance: number;
 }
 
-export default function FinancialGoals({ goals, onAddGoal, onInvestInGoal, liquidBalance }: FinancialGoalsProps) {
+export default function FinancialGoals({ goals, onAddGoal, onInvestInGoal, onDeleteGoal, liquidBalance }: FinancialGoalsProps) {
   // Add Goal Form State
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
@@ -136,7 +138,21 @@ export default function FinancialGoals({ goals, onAddGoal, onInvestInGoal, liqui
                             {goal.category}
                           </span>
                         </div>
-                        <span className="text-sm font-mono text-cyan-400 font-bold">{progressPercent}%</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-mono text-cyan-400 font-bold">{progressPercent}%</span>
+                          <button
+                            id={`btn-del-goal-${goal.id}`}
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete goal "${goal.name}"?`)) {
+                                onDeleteGoal?.(goal.id);
+                              }
+                            }}
+                            className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-white/5 transition-all cursor-pointer"
+                            title="Delete goal"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Progress Bar */}

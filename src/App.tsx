@@ -181,6 +181,17 @@ export default function App() {
 
   // Fetch full financial data on session activation
   const fetchUserData = async () => {
+    // 1. Prefer user's customized localStorage dataset if it exists
+    const localCustom = localStorage.getItem("idbi_user_data_custom");
+    if (localCustom) {
+      try {
+        setUserData(JSON.parse(localCustom));
+        return;
+      } catch (e) {
+        console.error("Failed to parse custom local ledger data:", e);
+      }
+    }
+
     try {
       const res = await fetch("/api/user-data", {
         headers: getHeaders()
@@ -204,6 +215,13 @@ export default function App() {
     }
   }, [isLoggedIn, token]);
 
+  // Save customized data to localStorage whenever userData changes
+  useEffect(() => {
+    if (userData) {
+      localStorage.setItem("idbi_user_data_custom", JSON.stringify(userData));
+    }
+  }, [userData]);
+
   // Handle mock and real logouts
   const handleLogout = async () => {
     try {
@@ -216,6 +234,7 @@ export default function App() {
     } catch (err) {
       console.error("Failed to sign out:", err);
     }
+    // Optional: Keep custom data or clear on logout. Let's keep it to prevent losing work.
     setIsLoggedIn(false);
     setUserData(null);
     setToken(null);
@@ -229,7 +248,40 @@ export default function App() {
     }
   };
 
-  // Add new savings goal and sync with backend
+  // Recalculates summaries and financial health dynamically based on portfolio and transaction logs
+  const getRecalculatedSummary = (
+    profile: UserProfile,
+    goals: Goal[],
+    portfolio: Portfolio,
+    transactions: Transaction[]
+  ) => {
+    const totalCredits = transactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0);
+    const totalDebits = transactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0);
+    
+    const startingBalance = Number(localStorage.getItem("idbi_starting_balance") || "450000");
+    const liquidBalance = Math.max(0, startingBalance + totalCredits - totalDebits);
+    
+    const monthlyIncome = profile.monthlyIncome || 120000;
+    const monthlySpending = transactions
+      .filter(t => t.type === "debit" && t.category !== "Investment")
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const netSavings = Math.max(0, monthlyIncome - monthlySpending);
+    const savingsRatio = monthlyIncome > 0 ? (netSavings / monthlyIncome) : 0;
+    let score = 50 + Math.round(savingsRatio * 50);
+    if (score > 100) score = 100;
+    if (score < 30) score = 30;
+
+    return {
+      liquidBalance,
+      monthlyIncome,
+      monthlySpending,
+      netSavings,
+      financialHealthScore: score
+    };
+  };
+
+  // Add new savings goal
   const handleAddGoal = async (newGoal: {
     name: string;
     targetAmount: number;
@@ -238,22 +290,38 @@ export default function App() {
     category: 'House' | 'Car' | 'Education' | 'Vacation' | 'Retirement' | 'General';
   }) => {
     if (!userData) return;
+    const goalId = `g-custom-${Date.now()}`;
+    const goalObj: Goal = {
+      ...newGoal,
+      id: goalId,
+      currentSavings: 0
+    };
+
+    const updatedGoals = [...userData.goals, goalObj];
+    setUserData({
+      ...userData,
+      goals: updatedGoals
+    });
+
     try {
-      const res = await fetch("/api/goals", {
+      await fetch("/api/goals", {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify(newGoal),
       });
-      const data = await res.json();
-      if (data.success && userData) {
-        setUserData({
-          ...userData,
-          goals: data.goals,
-        });
-      }
     } catch (error) {
-      console.error("Add goal error:", error);
+      console.warn("Backend unavailable, goal saved in offline-mode.");
     }
+  };
+
+  // Delete an existing goal
+  const handleDeleteGoal = (goalId: string) => {
+    if (!userData) return;
+    const updatedGoals = userData.goals.filter(g => g.id !== goalId);
+    setUserData({
+      ...userData,
+      goals: updatedGoals
+    });
   };
 
   // Allocate cash from liquid surplus to a targeted goal
@@ -266,41 +334,175 @@ export default function App() {
       return;
     }
 
+    const updatedGoals = userData.goals.map(g => {
+      if (g.id === goalId) {
+        return {
+          ...g,
+          currentSavings: g.currentSavings + amount
+        };
+      }
+      return g;
+    });
+
+    // To deduct this investment from liquid cash, we log a corresponding Debit Transaction!
+    const targetGoalName = userData.goals.find(g => g.id === goalId)?.name || "Goal Allocation";
+    const goalDebitTx: Transaction = {
+      id: `tx-invest-${Date.now()}`,
+      date: new Date().toISOString().split("T")[0],
+      category: "Investment",
+      description: `Allocated funds to: ${targetGoalName}`,
+      amount: amount,
+      type: "debit",
+      status: "completed"
+    };
+
+    const updatedTransactions = [goalDebitTx, ...userData.transactions];
+    const newSummary = getRecalculatedSummary(userData.profile, updatedGoals, userData.portfolio, updatedTransactions);
+
+    setUserData({
+      ...userData,
+      goals: updatedGoals,
+      transactions: updatedTransactions,
+      summary: newSummary
+    });
+
     try {
-      const res = await fetch("/api/goals/invest", {
+      await fetch("/api/goals/invest", {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ goalId, amount }),
       });
-      const data = await res.json();
-      if (data.success && userData) {
-        setUserData({
-          ...userData,
-          goals: data.goals,
-          summary: {
-            ...userData.summary,
-            liquidBalance: userData.summary.liquidBalance - amount,
-          },
-        });
-      }
     } catch (error) {
-      console.error("Fund allocation error:", error);
+      console.warn("Backend unavailable, investment logged in offline-mode.");
     }
+  };
+
+  // Add a brand-new custom transaction
+  const handleAddTransaction = (newTx: Omit<Transaction, "id">) => {
+    if (!userData) return;
+    const txId = `tx-custom-${Date.now()}`;
+    const txObj: Transaction = {
+      ...newTx,
+      id: txId,
+      status: "completed"
+    };
+
+    const updatedTransactions = [txObj, ...userData.transactions];
+    const newSummary = getRecalculatedSummary(userData.profile, userData.goals, userData.portfolio, updatedTransactions);
+
+    setUserData({
+      ...userData,
+      transactions: updatedTransactions,
+      summary: newSummary
+    });
+  };
+
+  // Delete a transaction from registry
+  const handleDeleteTransaction = (txId: string) => {
+    if (!userData) return;
+    const updatedTransactions = userData.transactions.filter(t => t.id !== txId);
+    const newSummary = getRecalculatedSummary(userData.profile, userData.goals, userData.portfolio, updatedTransactions);
+
+    setUserData({
+      ...userData,
+      transactions: updatedTransactions,
+      summary: newSummary
+    });
+  };
+
+  // Edit custom portfolio asset weights
+  const handleUpdatePortfolioAssets = (updatedAssets: typeof userData.portfolio.assets) => {
+    if (!userData) return;
+    const totalValue = updatedAssets.reduce((sum, a) => sum + a.amount, 0);
+    const finalAssets = updatedAssets.map(a => ({
+      ...a,
+      percentage: totalValue > 0 ? Math.round((a.amount / totalValue) * 100) : 0
+    }));
+
+    // Weighted returns percentage
+    const totalWeightedReturns = finalAssets.reduce((sum, a) => sum + (a.returnsYTD * a.amount), 0);
+    const ytdReturnsPercentage = totalValue > 0 ? Number((totalWeightedReturns / totalValue).toFixed(1)) : 0;
+    const totalReturns = Math.round(totalValue * 0.14); // estimate 14% historical compounding returns
+
+    const updatedPortfolio = {
+      ...userData.portfolio,
+      assets: finalAssets,
+      totalValue,
+      totalReturns,
+      ytdReturnsPercentage
+    };
+
+    setUserData({
+      ...userData,
+      portfolio: updatedPortfolio
+    });
+  };
+
+  // Clean Slate: Clear all sample data
+  const handleClearSampleData = () => {
+    const cleanFreshUserData = {
+      profile: {
+        name: "My Name",
+        email: "client@idbi.com",
+        age: 30,
+        occupation: "Private Sector Executive",
+        monthlyIncome: 120000,
+        riskAppetite: "Moderate" as const,
+        investmentPreference: ["Mutual Funds"],
+        language: "English",
+        theme: "dark" as const
+      },
+      goals: [],
+      portfolio: {
+        totalValue: 0,
+        assets: [],
+        totalReturns: 0,
+        ytdReturnsPercentage: 0,
+        growthHistory: [
+          { month: "Jan", value: 0, benchmark: 0 },
+          { month: "Feb", value: 0, benchmark: 0 },
+          { month: "Mar", value: 0, benchmark: 0 },
+          { month: "Apr", value: 0, benchmark: 0 },
+          { month: "May", value: 0, benchmark: 0 },
+          { month: "Jun", value: 0, benchmark: 0 }
+        ]
+      },
+      transactions: [],
+      summary: {
+        liquidBalance: 200000, // Initialize with custom starting credit
+        monthlyIncome: 120000,
+        monthlySpending: 0,
+        netSavings: 120000,
+        financialHealthScore: 100
+      }
+    };
+    localStorage.setItem("idbi_starting_balance", "200000");
+    setUserData(cleanFreshUserData);
+    alert("Sample data successfully cleared! Feed your own name, custom profile, assets, and transactions.");
+  };
+
+  // Restore the pre-filled IDBI demo ledger
+  const handleRestoreDemoData = () => {
+    localStorage.removeItem("idbi_user_data_custom");
+    localStorage.removeItem("idbi_starting_balance");
+    setUserData(fallbackUserData);
+    alert("Pre-filled IDBI demonstration ledger restored successfully.");
   };
 
   // Sync profile details updated inside settings
   const handleUpdateProfile = async (updatedProfile: Partial<UserProfile>) => {
     if (!userData) return;
+    const nextProfile = {
+      ...userData.profile,
+      ...updatedProfile,
+    } as UserProfile;
+
+    const newSummary = getRecalculatedSummary(nextProfile, userData.goals, userData.portfolio, userData.transactions);
+
     setUserData({
       ...userData,
-      profile: {
-        ...userData.profile,
-        ...updatedProfile,
-      } as UserProfile,
-      summary: {
-        ...userData.summary,
-        monthlyIncome: updatedProfile.monthlyIncome ?? userData.summary.monthlyIncome,
-      },
+      profile: nextProfile,
+      summary: newSummary,
     });
 
     try {
@@ -310,7 +512,7 @@ export default function App() {
         body: JSON.stringify(updatedProfile),
       });
     } catch (error) {
-      console.error("Failed to sync profile updates on backend:", error);
+      console.warn("Failed to sync profile updates on backend, updated offline.");
     }
   };
 
@@ -348,7 +550,14 @@ export default function App() {
               path="/dashboard"
               element={
                 isLoggedIn ? (
-                  <Dashboard userData={userData} onInvestInGoal={handleInvestInGoal} />
+                  <Dashboard
+                    userData={userData}
+                    onInvestInGoal={handleInvestInGoal}
+                    onClearSampleData={handleClearSampleData}
+                    onRestoreDemoData={handleRestoreDemoData}
+                    onAddTransaction={handleAddTransaction}
+                    onDeleteTransaction={handleDeleteTransaction}
+                  />
                 ) : (
                   <Navigate to="/login" replace />
                 )
@@ -370,7 +579,12 @@ export default function App() {
               path="/analytics"
               element={
                 isLoggedIn && userData ? (
-                  <SpendingAnalytics transactions={userData.transactions} monthlyIncome={userData.summary.monthlyIncome} />
+                  <SpendingAnalytics
+                    transactions={userData.transactions}
+                    monthlyIncome={userData.summary.monthlyIncome}
+                    onAddTransaction={handleAddTransaction}
+                    onDeleteTransaction={handleDeleteTransaction}
+                  />
                 ) : (
                   <Navigate to="/login" replace />
                 )
@@ -401,6 +615,7 @@ export default function App() {
                     goals={userData.goals}
                     onAddGoal={handleAddGoal}
                     onInvestInGoal={handleInvestInGoal}
+                    onDeleteGoal={handleDeleteGoal}
                     liquidBalance={userData.summary.liquidBalance}
                   />
                 ) : (
@@ -424,7 +639,10 @@ export default function App() {
               path="/portfolio"
               element={
                 isLoggedIn && userData ? (
-                  <PortfolioPage portfolio={userData.portfolio} />
+                  <PortfolioPage
+                    portfolio={userData.portfolio}
+                    onUpdatePortfolioAssets={handleUpdatePortfolioAssets}
+                  />
                 ) : (
                   <Navigate to="/login" replace />
                 )

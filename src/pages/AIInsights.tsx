@@ -15,6 +15,54 @@ import {
 import AnimatedCard from "../components/AnimatedCard";
 import { AIInsight } from "../types";
 
+const fallbackInsights: AIInsight[] = [
+  {
+    id: "in-1",
+    title: "Optimize Idle Liquid Cash",
+    category: "investment",
+    description: "You are holding ₹4,50,000 in your low-interest savings account which yields only 3.5%.",
+    reason: "Holding excessive cash in savings reduces purchasing power over time due to inflation.",
+    confidence: 96,
+    suggestedAction: "Transfer ₹3,00,000 to an IDBI Multi-Option Deposit FD earning 7.4% YTD returns with full liquidity.",
+  },
+  {
+    id: "in-2",
+    title: "Discretionary Spending Spike Detected",
+    category: "budget",
+    description: "Your shopping and lifestyle expenses have increased by 17.4% compared to your 3-month average.",
+    reason: "Incremental purchases on high-end electronic items and digital portals created a major pocket outflow.",
+    confidence: 88,
+    suggestedAction: "Set up a spending sub-limit cap of ₹15,000 on your IDBI Visa Signature Debit Card.",
+  },
+  {
+    id: "in-3",
+    title: "Moderate Risk Equity Room Available",
+    category: "investment",
+    description: "Your current asset allocation consists of 35% low-risk instruments, but your profile allows up to 65% equity exposure.",
+    reason: "Historically, Moderate risk investors maximize wealth through higher allocation in large & mid-cap indices.",
+    confidence: 92,
+    suggestedAction: "Initiate a ₹12,000 monthly SIP in the IDBI Nifty Index Mutual Fund.",
+  },
+  {
+    id: "in-4",
+    title: "Emergency Fund Coverage Squeeze",
+    category: "alert",
+    description: "Your emergency capital cover accounts for only 2 months of operational expenses including housing EMI.",
+    reason: "A safe cushion protects high-earning software developers from unexpected economic layoffs or delays.",
+    confidence: 95,
+    suggestedAction: "Direct ₹2,50,000 to a Liquid debt mutual fund, ensuring 6 months of continuous expenses are hedged.",
+  },
+  {
+    id: "in-5",
+    title: "Goal Realization Pace Mismatch",
+    category: "saving",
+    description: "Your current contribution of ₹45,000/month leaves you ₹12.5L short of your 'Dream House' goal target.",
+    reason: "The target year 2031 demands a compound savings factor which is currently lagging behind schedule.",
+    confidence: 84,
+    suggestedAction: "Step-up your monthly home savings goal contribution by 8% annually.",
+  }
+];
+
 export default function AIInsights() {
   const [insights, setInsights] = useState<AIInsight[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,10 +72,16 @@ export default function AIInsights() {
     setIsLoading(true);
     try {
       const res = await fetch("/api/insights");
-      const data = await res.json();
-      setInsights(data);
+      if (res.ok) {
+        const data = await res.json();
+        setInsights(data);
+      } else {
+        console.warn("API returned error or not OK, using client-side fallback insights.");
+        setInsights(fallbackInsights);
+      }
     } catch (e) {
-      console.error(e);
+      console.warn("Could not connect to backend, activating client-side fallback insights:", e);
+      setInsights(fallbackInsights);
     } finally {
       setIsLoading(false);
     }
