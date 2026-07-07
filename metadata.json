@@ -1,0 +1,6 @@
+{
+  "name": "IDBI WealthAI",
+  "description": "Your AI Relationship Manager for Smarter Wealth Decisions. AI-powered wealth advisory and portfolio management portal.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
